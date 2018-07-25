@@ -1,0 +1,12 @@
+nimcache
+src/nimcache
+bin
+src/config.nims
+special
+docs/html
+
+tests/*
+- tests/*.nims
+- tests/*.nim
+
+.vscode
