@@ -1,12 +1,9 @@
 nimcache
-src/nimcache
 bin
-src/config.nims
+src
 special
+examples
 docs/html
-
-tests/*
-- tests/*.nims
-- tests/*.nim
+tests/
 
 .vscode
