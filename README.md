@@ -12,7 +12,7 @@ It can be built and installed via [nimble](https://github.com/nim-lang/nimble),
 the [Nim](https://nim-lang.org) package manager
 (see the [installation instructions](https://nim-lang.org/install.html)):
 ```
-nimble install https://github.com/guibar64/polypbren.git
+nimble install polypbren
 ```
 
 

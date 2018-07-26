@@ -6,7 +6,7 @@ Overview
 Polypbren is a program that computes the renormalized parameters (renormalized charges and screening length) for dispersions of
 charged spherical particles with arbitrary size distributions. The surface charge of the colloids can be fixed or regulated by pH.
 The Poisson-Boltzmann Cell Model and Renormalized Jellium Model are implemented.
-This `paper <https://arxiv.org/abs/1807.09542>`_) details the calculations it was designed for.
+This `paper <https://arxiv.org/abs/1807.09542>`_ details the calculations it was designed for.
 See also the `References`_ for more information on the scientific part.
 
 
@@ -23,18 +23,26 @@ The installation instructions are `here <https://nim-lang.org/install.html>`_.
 The following command line
 
 ::
-   nimble install https://github.com/guibar64/polypbren.git
+   nimble install polypbren
 
 will download the source files, compile an executable (``polypbren.exe`` on windows, ``polypbren`` elsewhere). 
 The binary is installed by default in ``~/.nimble/bin``
 (or elsewhere depending on your nimble setting and OS).
 
-Alternatively the whole repository (including examples) can be downloaded,
-and the main program can be manually compiled following the command lines,
+Alternatively the whole repository (including examples) can be downloaded:
+
+::
+   git clone https://github.com/guibar64/polypbren.git
+
+or with ``nimble develop``:
+
+::
+   nimble develop polypbren
+   
+Then the main program can be manually compiled following the command lines,
 
 ::
    
-    git clone https://github.com/guibar64/polypbren.git
     cd polypbren
     nim c -d:release src/polypbren 
 
