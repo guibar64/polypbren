@@ -5,7 +5,9 @@ Overview
 
 Polypbren is a program that computes the renormalized parameters (renormalized charges and screening length) for dispersions of
 charged spherical particles with arbitrary size distributions. The surface charge of the colloids can be fixed or regulated by pH.
-The Poisson-Boltzmann Cell Model and Renormalized Jellium Model are implemented. See the `References`_ for more information on the scientific part.
+The Poisson-Boltzmann Cell Model and Renormalized Jellium Model are implemented.
+This `paper <https://arxiv.org/abs/1807.09542>`_) details the calculations it was designed for.
+See also the `References`_ for more information on the scientific part.
 
 
 .. contents::
