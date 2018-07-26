@@ -328,7 +328,8 @@ Computes the cumulative (ions only) surface charge density of the system
 
 
 </dd>
-<dt id="solve"><a name="solve,PBEquation,int,float"></a><pre><span class="Keyword">proc</span> <span class="Identifier">solve</span><span class="Other">(</span><span class="Identifier">eq</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">PBEquation</span><span class="Other">;</span> <span class="Identifier">niter</span> <span class="Other">=</span> <span class="DecNumber">10000</span><span class="Other">;</span> <span class="Identifier">tol</span> <span class="Other">=</span> <span class="FloatNumber">1e-05</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt id="solve"><a name="solve,PBEquation,int,float"></a><pre><span class="Keyword">proc</span> <span class="Identifier">solve</span><span class="Other">(</span><span class="Identifier">eq</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">PBEquation</span><span class="Other">;</span> <span class="Identifier">niter</span> <span class="Other">=</span> <span class="DecNumber">10000</span><span class="Other">;</span> <span class="Identifier">tol</span> <span class="Other">=</span> <span class="FloatNumber">1e-05</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">noSideEffect</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 Solves the Equation for the boundary conditions previously set, in a maximum of <tt class="docutils literal"><span class="pre">niter</span></tt> iterations, for a tolerance of <tt class="docutils literal"><span class="pre">tol</span></tt> on the residue. Returns the number of iterations effectively computed.
 
@@ -364,7 +365,7 @@ Solves the Equation by nullifying iteratively the conditional function  <tt clas
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small>Made with Nim. Generated: 2018-07-24 17:58:53 UTC</small>
+        <small>Made with Nim. Generated: 2018-07-26 08:54:42 UTC</small>
       </div>
     </div>
   </div>
