@@ -144,7 +144,7 @@ proc loadParams*(fileParas: string) =
       of "sitedensity": siteDens = parseFloat(val)
       of "sternlength": sternL = parseFloat(val)
       of "temperature": temperature = parseFloat(val)
-      of "max_potential_zeff_jellium": max_potential_zeff_jellium = parseFloat(val)
+      of "maxpotentialzeffjellium": max_potential_zeff_jellium = parseFloat(val)
       of "factcalczeffjellium": factCalcZeffJellium = parseFloat(val)
       of "factphi0chargecond": factPhi0ChargeCond = parseFloat(val)
       else:
