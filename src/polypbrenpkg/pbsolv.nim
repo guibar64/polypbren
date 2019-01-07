@@ -131,12 +131,10 @@ proc defBoundCond*(e: var PBEquation, bcL,bcR: BoundaryCondition, left = 0.0, ri
   case bcL
   of BCval: e.phiL = left
   of BCder: e.phiLd = left
-  else: discard
   e.bcR = bcR
   case bcR
   of BCval: e.phiR = right
   of BCder: e.phiRd = right
-  else: discard
 
 proc initPBEquation*(smin, smax, sbin: float, zv, concv: openArray[float], kind = PlanePBE,
                     bcL=BCval, bcR=BCder, left=0.0, right = 0.0, lambdab = 0.715,
@@ -234,7 +232,6 @@ proc ztotAdim(e: PBEquation): float {.noSideEffect.} =
       sum+=chargeTerm(e,e.phi[i])
     sum += chargeTerm(e,e.phi[e.phi.high])
     result = e.f0 + h*sum
-  else: discard
     
 proc sigma*(e: PBEquation): float {.inline.} = (-ztotAdim(e)+e.f0)/(4*PI*e.lb)
   ## Computes the inner (ion+background) surface charge density of the system
@@ -267,7 +264,6 @@ proc sigmaCum*(e: PBEquation): seq[float] {.noSideEffect.} =
       result[i] = sum
       prev=next
     for r in result.mitems: r *= (0.5*h)
-  else: discard
   for r in result.mitems: r /= (4*PI*e.lb)
   for r in result.mitems: r += e.sigma
 
@@ -299,7 +295,6 @@ proc sigmaCumSansBack*(e: PBEquation): seq[float] {.noSideEffect.} =
       result[i] = sum
       prev=next
     for r in result.mitems: r *= -(0.5*h)
-  else: discard
   for r in result.mitems: r /= (4*PI*e.lb)
   for r in result.mitems: r += e.sigma
 
@@ -318,7 +313,6 @@ proc laplacian(e: PBEquation, i: int): float =
   case e.kind
   of PlanePBE: result = (phinext - 2.0*phi + phiprev)*hi2
   of RadialPBE: result = (phinext - 2.0*phi + phiprev)*hi2 + (phinext - phiprev)*shi
-  else: discard
 
 proc ngs_iter(RadialPlac: static[EqModelkind], saltKind: static[SaltKind], eq: var PBEquation): float {.noSideEffect, inline.} =
 # radial PBNewton Gauss-Seidel iteration

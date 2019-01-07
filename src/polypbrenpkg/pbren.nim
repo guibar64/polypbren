@@ -99,7 +99,6 @@ proc solvation*(eq: var PBEquation, fam: FamComp, finalSig: var float): int =
   of ChargeCond:
     let fac = factPhi0ChargeCond*(chin-sig1)/chin*phi01
     result = eq.solveByNeutralization(tolF = tolPhi0, tolIn = tolInLoop, nitermax = maxIters, niterin = maxInIters, minVal = phi01-fac, maxVal=phi01+fac)
-  else: result=0
 
 
 type PbrenRes* = object
