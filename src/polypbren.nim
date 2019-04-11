@@ -23,7 +23,7 @@ proc getHostName(): string {.compileTime, used.} =
 
 
 const
-  version = "0.4.0"
+  version = "0.4.2"
   revision = gitRevision()
   buildInfo = when defined(printBuildInfo) :
                 "Compiled on " & getHostName() & ", " & CompileDate & ", " & CompileTime & " with Nim " & NimVersion 

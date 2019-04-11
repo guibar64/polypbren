@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.0"
+version       = "0.4.2"
 author        = "G. Bareigts"
 description   = "Renormalization of colloidal charges of polydipserse dispersions using the Poisson-Boltzmann equation"
 license       = "MIT"

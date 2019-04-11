@@ -70,6 +70,9 @@ var
   ionChv*: seq[float] = @[-1.0, 1.0]
   ionDensv*: seq[float] = @[5*mM, 5*mM]
 
+const
+  ValueChars = IdentChars + {'.','-'}
+
 iterator configKeyVals*(fileName: string): tuple[key, val: string] =
   template raiseSyntaxError(msg: string) =
     raise newException(KeyError, "Syntax error at line " & $nl & ": " & msg)
@@ -91,8 +94,8 @@ iterator configKeyVals*(fileName: string): tuple[key, val: string] =
       else:
         setLen(val, 0)
         case line[pos]
-        of IdentChars:
-          discard parseWhile(line, val, IdentChars + {'.'}, start = pos)
+        of ValueChars:
+          discard parseWhile(line, val, ValueChars, start = pos)
           yield (key, val)
         of '"':
           discard parseUntil(line, val, '"', start = pos+1)
