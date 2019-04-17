@@ -145,7 +145,7 @@ proc doCalculations*(distribution: Distrib): PbrenRes =
         proc initer(x: float): float =
           result = lambdaB*Zr/(1.0 + s0/dlen)*exp(-(x-s0)/dlen)/x
         var eq = initPBEquation(s0, sR, sbin, zv = ionChv, concv=ionDensv, kind = eqKind,
-                                lambdab = lambdaB, charge = fam.ch,rho = rhoBack)
+                                lambdab = lambdaB, charge = fam.ch,rho = rhoBack, gridStep = gridStep)
         eq.initialize(initer)
         let ires = eq.residual
         var itereff = solvation(eq, distribution[f], result.finalSig[f])
@@ -231,7 +231,7 @@ proc doCalculations*(distribution: Distrib): PbrenRes =
           result = pref*(-1.0+(fplus*exp(+kappaEff*x)+fmoins*exp(-kappaEff*x))/x)
 
         var eq = initPBEquation(rp,slim, sbin, zv = ionChv, concv=ionDensv, kind = eqKind,
-                              lambdab = lambdaB, charge = fam.ch,rho = 0.0)
+                              lambdab = lambdaB, charge = fam.ch,rho = 0.0, gridStep = gridStep)
         eq.initialize(initerCell)
         #let ires = eq.residual
         var itereff = solvation(eq, distribution[f], result.finalSig[f])

@@ -65,6 +65,7 @@ var
   max_potential_zeff_jellium* = 0.5
   factCalcZeffJellium* = 3.5   # Unused
   factPhi0ChargeCond* = 1.2
+  gridStep* = 2
 
 var 
   ionChv*: seq[float] = @[-1.0, 1.0]
@@ -150,6 +151,7 @@ proc loadParams*(fileParas: string) =
       of "maxpotentialzeffjellium": max_potential_zeff_jellium = parseFloat(val)
       of "factcalczeffjellium": factCalcZeffJellium = parseFloat(val)
       of "factphi0chargecond": factPhi0ChargeCond = parseFloat(val)
+      of "gridstep": gridStep = parseInt(val)
       else:
         quit "Error: " & fileParas & ": Unkown parameter : " & key, 1
   except KeyError, ValueError:

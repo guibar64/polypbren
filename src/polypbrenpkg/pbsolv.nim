@@ -79,66 +79,76 @@ type
     skGeneric, skIsoVal
   BoundaryCondition* = enum
     BCval,BCder
-  PBEquation* = object of RootObj
+  PBEquationPars = object
     kind*: EqModelKind
     saltKind: SaltKind
     bcL,bcR: BoundaryCondition
     N, nions: int
-    s0, h, f0: float
+    s0, f0: float
     phiL, phiLd, phiR,phiRd: float
     lb, rho: float
-    fac,z : array[Nionsmax, float]
+    fac,z: array[Nionsmax, float]
+  PBEquation* = object
+    pars: PBEquationPars
+    grid: int
+    h, h2: float
     phi*: seq[float]
+    phi2: seq[float]
 
-proc defMesh*(pbe: var PBEquation, smin, smax,sbin: float, reDefSbin = true) =
+proc defMesh*(pbe: var PBEquation, smin, smax,sbin: float, reDefSbin = true, gridStep = 2) =
   ## Defines (or redefines) the space grid for equation ``pbe``.
   ## ``smin`` is the lower bound, ``smax`` the higher, ``sbin``
   ## the space interval.
   ## If ``reDefSbin`` is set to true, then ``sbin`` is redefined
-  ## to match the [``sbin``, ``smax``] interval.
+  ## to match the [``sbin``, ``smax``] interval and ``gridStep``.
   ## Dimensions of potential tables : N = int((smin-smax)/pas)
   ## raises ``ValueError`` if the grid is too small (number of points < 3)
-  var N = int((smax-smin)/sbin) + 1
-  if N < 3: raise newException(ValueError, "Grid too small (#points < 3): min=" & $smin & " max=" & $smax & "bin=" & $sbin)
+  var
+    n2 = (int((smax-smin)/sbin) ) div gridStep + 1 
+    n = gridStep * (n2 - 1) + 1
+  if n2 < 3: raise newException(ValueError, "Grid too small (#points < 3): min=" & $smin & " max=" & $smax & "bin=" & $sbin)
   if reDefSbin:
-    pbe.h = (smax-smin)/(float(N-1))
+    pbe.h = (smax-smin)/(float(n-1))
   else:
     pbe.h = sbin
-  pbe.s0 = smin
-  pbe.phi = newSeq[float](N)
-  pbe.N = N
+  pbe.h2 = gridStep.float * pbe.h
+  pbe.pars.s0 = smin
+  pbe.phi = newSeq[float](n)
+  pbe.pars.N = n
+  pbe.phi2 = newSeq[float](n2)
+  pbe.grid = gridStep
 
 proc `charge=`*(e: var PBEquation, charge: float) =
   ## sets the surface charge density of the left (inner) surface
-  e.f0 = charge*(4*PI*e.lb)
+  e.pars.f0 = charge*(4*PI*e.pars.lb)
 
 proc `rho=`*(e: var PBEquation, rho: float) =
   ## sets the density of an uniform background charge
-  e.rho = 4.0*PI*e.lb*rho
+  e.pars.rho = 4.0*PI*e.pars.lb*rho
 
 proc `lambdab=`*(e: var PBEquation, lambdab: float) =
   ## changes the bjerrum length
-  if e.lb != 0.0:
-    e.rho = e.rho/e.lb*lambdab
-    e.f0 = e.f0/e.lb*lambdab
-  e.lb = lambdab
+  if e.pars.lb != 0.0:
+    e.pars.rho = e.pars.rho/e.pars.lb*lambdab
+    e.pars.f0 = e.pars.f0/e.pars.lb*lambdab
+  e.pars.lb = lambdab
 
 proc defBoundCond*(e: var PBEquation, bcL,bcR: BoundaryCondition, left = 0.0, right = 0.0) =
   ## Defines the boundary conditions : left (or inner radius) (type is ``bcL``, 
   ## value is ``left``),
   ## and right (or outer radius) (type is ``bcL``, value is ``left``) conditions.
-  e.bcL = bcL
+  e.pars.bcL = bcL
   case bcL
-  of BCval: e.phiL = left
-  of BCder: e.phiLd = left
-  e.bcR = bcR
+  of BCval: e.pars.phiL = left
+  of BCder: e.pars.phiLd = left
+  e.pars.bcR = bcR
   case bcR
-  of BCval: e.phiR = right
-  of BCder: e.phiRd = right
+  of BCval: e.pars.phiR = right
+  of BCder: e.pars.phiRd = right
 
 proc initPBEquation*(smin, smax, sbin: float, zv, concv: openArray[float], kind = PlanePBE,
                     bcL=BCval, bcR=BCder, left=0.0, right = 0.0, lambdab = 0.715,
-                    charge = 0.0 ,rho= 0.0): PBEquation =
+                    charge = 0.0 ,rho= 0.0, gridStep = 2): PBEquation =
   ## Returns a new PBEquation object.
   ## Parameters:
   ##   - ``smin``: minimum of radius/x coordinate
@@ -154,27 +164,27 @@ proc initPBEquation*(smin, smax, sbin: float, zv, concv: openArray[float], kind 
   ##   - ``charge``: surface charge density of the left (inner) surface
   ##   - ``rho``: charge density of the background charge
 
-  defMesh(result, smin,smax,sbin)
+  defMesh(result, smin,smax,sbin, gridStep = gridStep)
   defBoundCond(result, bcL, bcR, left, right)
 
-  result.kind = kind
-  result.f0 = charge*(4*PI*lambdab)
-  result.lb = lambdab
-  result.rho = 4.0*PI*lambdab*rho
+  result.pars.kind = kind
+  result.pars.f0 = charge*(4*PI*lambdab)
+  result.pars.lb = lambdab
+  result.pars.rho = 4.0*PI*lambdab*rho
   assert(zv.len >= 1 and concv.len >= 1)
-  result.nions = min(min(zv.len, concv.len),NionsMax)
+  result.pars.nions = min(min(zv.len, concv.len),NionsMax)
   var truc=0.0
-  for i in 0..<result.nions:
-    result.z[i] = zv[i]
-    result.fac[i] = 4.0*PI*lambdab*zv[i]*concv[i]
-    truc += zv[i]*result.fac[i]
-  if(result.nions == 2):
-    if zv[0] == -zv[1] : result.saltKind = skIsoval
-    else: result.saltKind = skGeneric
+  for i in 0..<result.pars.nions:
+    result.pars.z[i] = zv[i]
+    result.pars.fac[i] = 4.0*PI*lambdab*zv[i]*concv[i]
+    truc += zv[i]*result.pars.fac[i]
+  if(result.pars.nions == 2):
+    if zv[0] == -zv[1] : result.pars.saltKind = skIsoval
+    else: result.pars.saltKind = skGeneric
 
 proc initialize*(e: var PBEquation, f: proc (x: float): float {.closure.}) =
   ## Initialize the potential with a function.
-  var x = e.s0
+  var x = e.pars.s0
   for phi in e.phi.mitems:
     phi = f(x)
     x+=e.h
@@ -187,14 +197,14 @@ proc initialize*(e: var PBEquation, x: float) =
 proc mesh*(e: var PBEquation): seq[float] =
   ## gives the grid used by ``e`` as a sequence of x coordinates (or radial coordinates).
   result = newSeq[float](e.phi.len)
-  for i in 0..e.phi.high: result[i] = e.s0 + float(i)*e.h
-      
-proc chargeTerm(e: PBEquation,phi: float): float {.noSideEffect.} =
-  result = e.rho
-  for i in 0..<e.nions:
-    result += e.fac[i]*exp(-e.z[i]*phi)
+  for i in 0..e.phi.high: result[i] = e.pars.s0 + float(i)*e.h
 
-proc chargeAndDerivTerms(e: PBEquation,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
+proc chargeTerm(e: PBEquation,phi: float): float {.noSideEffect.} =
+  result = e.pars.rho
+  for i in 0..<e.pars.nions:
+    result += e.pars.fac[i]*exp(-e.pars.z[i]*phi)
+
+proc chargeAndDerivTerms(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
   result.ch = e.rho
   for i in 0..<e.nions:
     let
@@ -203,7 +213,7 @@ proc chargeAndDerivTerms(e: PBEquation,phi: float): tuple[ch: float,der: float] 
     result.ch += fl
     result.der -= z*fl
 
-proc chargeAndDerivTermsIsoVal(e: PBEquation,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
+proc chargeAndDerivTermsIsoVal(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
   let z=e.z[0]
   let dump=e.fac[0]
   let dump2=exp(-z*phi)
@@ -216,8 +226,8 @@ proc ztotAdim(e: PBEquation): float {.noSideEffect.} =
     h = e.h
   assert(e.phi.len >= 3)
   var sum = 0.0
-  var s= e.s0
-  case e.kind
+  var s= e.pars.s0
+  case e.pars.kind
   of RadialPBE:
     sum = 0.5*s*s*chargeTerm(e,e.phi[0])
     for i in 1..<e.phi.high:
@@ -225,15 +235,15 @@ proc ztotAdim(e: PBEquation): float {.noSideEffect.} =
       sum+=s*s*chargeTerm(e,e.phi[i])
     s+=h
     sum += 0.5*s*s*chargeTerm(e,e.phi[e.phi.high])
-    result = e.f0 + (h*sum)/(e.s0*e.s0)
+    result = e.pars.f0 + (h*sum)/(e.pars.s0*e.pars.s0)
   of PlanePBE:
     sum = 0.5*chargeTerm(e,e.phi[0])
     for i in 1..<e.phi.high:
       sum+=chargeTerm(e,e.phi[i])
     sum += chargeTerm(e,e.phi[e.phi.high])
-    result = e.f0 + h*sum
+    result = e.pars.f0 + h*sum
     
-proc sigma*(e: PBEquation): float {.inline.} = (-ztotAdim(e)+e.f0)/(4*PI*e.lb)
+proc sigma*(e: PBEquation): float {.inline.} = (-ztotAdim(e)+e.pars.f0)/(4*PI*e.pars.lb)
   ## Computes the inner (ion+background) surface charge density of the system
 
 proc sigmaCum*(e: PBEquation): seq[float] {.noSideEffect.} =
@@ -243,28 +253,28 @@ proc sigmaCum*(e: PBEquation): seq[float] {.noSideEffect.} =
     h = e.h
   assert(e.phi.len >= 3)
   var sum = 0.0
-  var s= e.s0
+  var s= e.pars.s0
   result[0]=0.0
-  case e.kind
+  case e.pars.kind
   of RadialPBE:
     var prev = s*s*chargeTerm(e,e.phi[0])
-    for i in 1.. e.phi.high:
+    for i in 1..e.phi.high:
       s+=h
       let next=s*s*chargeTerm(e,e.phi[i])
       sum+=prev+next
       result[i] = sum
       prev=next
-    for r in result.mitems: r *= (0.5*h)/(e.s0*e.s0)
+    for r in result.mitems: r *= (0.5*h)/(e.pars.s0*e.pars.s0)
   of PlanePBE:
     var prev = chargeTerm(e,e.phi[0])
-    for i in 1.. e.phi.high:
+    for i in 1..e.phi.high:
       s+=h
       let next=chargeTerm(e,e.phi[i])
       sum+=prev+next
       result[i] = sum
       prev=next
     for r in result.mitems: r *= (0.5*h)
-  for r in result.mitems: r /= (4*PI*e.lb)
+  for r in result.mitems: r /= (4*PI*e.pars.lb)
   for r in result.mitems: r += e.sigma
 
 proc sigmaCumSansBack*(e: PBEquation): seq[float] {.noSideEffect.} =
@@ -274,33 +284,33 @@ proc sigmaCumSansBack*(e: PBEquation): seq[float] {.noSideEffect.} =
     h = e.h
   assert(e.phi.len >= 3)
   var sum = 0.0
-  var s= e.s0
+  var s= e.pars.s0
   result[0]=0.0
-  case e.kind
+  case e.pars.kind
   of RadialPBE:
-    var prev = s*s*(chargeTerm(e,e.phi[0])-e.rho)
-    for i in 1.. e.phi.high:
+    var prev = s*s*(chargeTerm(e,e.phi[0])-e.pars.rho)
+    for i in 1..e.phi.high:
       s+=h
-      let next=s*s*(chargeTerm(e,e.phi[i])-e.rho)
+      let next=s*s*(chargeTerm(e,e.phi[i])-e.pars.rho)
       sum+=prev+next
       result[i] = sum
       prev=next
-    for r in result.mitems: r *= (0.5*h)/(e.s0*e.s0)
+    for r in result.mitems: r *= (0.5*h)/(e.pars.s0*e.pars.s0)
   of PlanePBE:
-    var prev = (chargeTerm(e,e.phi[0])-e.rho)
+    var prev = (chargeTerm(e,e.phi[0])-e.pars.rho)
     for i in 1.. e.phi.high:
       s+=h
-      let next=(chargeTerm(e,e.phi[i])-e.rho)
+      let next=(chargeTerm(e,e.phi[i])-e.pars.rho)
       sum+=prev+next
       result[i] = sum
       prev=next
     for r in result.mitems: r *= -(0.5*h)
-  for r in result.mitems: r /= (4*PI*e.lb)
+  for r in result.mitems: r /= (4*PI*e.pars.lb)
   for r in result.mitems: r += e.sigma
 
 
 proc laplacian(e: PBEquation, i: int): float =
-  assert(e.N>=3)
+  assert(e.pars.N>=3)
   assert(i>0 and i<e.phi.high)
   let
     h = e.h
@@ -310,40 +320,41 @@ proc laplacian(e: PBEquation, i: int): float =
     phiprev = e.phi[i-1]
     phi = e.phi[i]
     phinext = e.phi[i+1]
-  case e.kind
+  case e.pars.kind
   of PlanePBE: result = (phinext - 2.0*phi + phiprev)*hi2
   of RadialPBE: result = (phinext - 2.0*phi + phiprev)*hi2 + (phinext - phiprev)*shi
 
-proc ngs_iter(RadialPlac: static[EqModelkind], saltKind: static[SaltKind], eq: var PBEquation): float {.noSideEffect, inline.} =
-# radial PBNewton Gauss-Seidel iteration
+proc ngs_iter(RadialPlac: static[EqModelkind], saltKind: static[SaltKind], eq: var PBEquationPars,
+  phi: var openArray[float], h: float): float {.noSideEffect, inline.} =
+  # radial PBNewton Gauss-Seidel iteration
   let
-    hh=eq.h
+    hh=h
     hh2=hh*hh
-    hi2=1.0/(eq.h*eq.h)
+    hi2=1.0/(h*h)
     moins2hi2= -2.0*hi2
     ss0=eq.s0
   result = 0.0
   var sh=hh*ss0
-  for i in 1.. eq.phi.high-1:
+  for i in 1..<phi.len-1:
     sh += hh2
     let (cht, numt) =
-      when saltKind == skIsoVal: chargeAndDerivTermsIsoVal(eq, eq.phi[i])
-      else: chargeAndDerivTerms(eq, eq.phi[i])
+      when saltKind == skIsoVal: chargeAndDerivTermsIsoVal(eq, phi[i])
+      else: chargeAndDerivTerms(eq, phi[i])
     let dlduo = moins2hi2 + numt
     var dent: float
     when RadialPlac == RadialPBE:
       let shi=1.0/sh
-      dent = (eq.phi[i+1] - 2.0*eq.phi[i] + eq.phi[i-1])*hi2 +
-           (eq.phi[i+1] - eq.phi[i-1])*shi + cht
+      dent = (phi[i+1] - 2.0*phi[i] + phi[i-1])*hi2 +
+           (phi[i+1] - phi[i-1])*shi + cht
     else:
-      dent = (eq.phi[i+1] - 2.0*eq.phi[i] + eq.phi[i-1])*hi2 + cht
-    eq.phi[i] -= dent/dlduo
+      dent = (phi[i+1] - 2.0*phi[i] + phi[i-1])*hi2 + cht
+    phi[i] -= dent/dlduo
     result += dent*dent
-  result /= float(eq.phi.high-1)
+  result /= float(phi.len-2)
   # BCs
-  let nlast=eq.phi.high
-  if eq.bcR == BCder: eq.phi[nlast] = eq.phi[nlast-1] + eq.phiRd*eq.h
-  if eq.bcL == BCder: eq.phi[0] = eq.phi[1] - eq.phiLd*eq.h
+  let nlast=phi.len-1
+  if eq.bcR == BCder: phi[nlast] = phi[nlast-1] #+ eq.phiRd*h
+  if eq.bcL == BCder: phi[0] = phi[1] - eq.phiLd*h
 
 proc residual*(e : PBEquation): float =
   result = 0.0
@@ -376,13 +387,27 @@ proc solve*(eq: var PBEquation, niter = 10000, tol = 0.00001): int {.noSideEffec
   ## Returns the number of iterations effectively computed.
   let tol2 = tol*tol
   var resi = tol2+1.0
-  if eq.N < 3: return 0
-  if eq.bcL == BCval: eq.phi[0] = eq.phiL
-  if eq.bcR == BCval: eq.phi[eq.phi.high] = eq.phiR
+  if eq.phi.len < 3: return 0
+  if eq.pars.bcL == BCval: eq.phi[0] = eq.pars.phiL
+  if eq.pars.bcR == BCval: eq.phi[eq.phi.high] = eq.pars.phiR
   var count = niter
-  dispatchEqKind(eq.kind, eq.saltKind):
+  dispatchEqKind(eq.pars.kind, eq.pars.saltKind):
+    for i in 0..<eq.phi2.len-1:
+      eq.phi2[i] = eq.phi[i*eq.grid]
+    eq.phi2[^1] = eq.phi[^1]
     for step in 1..niter:
-      resi = ngs_iter(eqKind, eqSaltKind, eq)
+      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi2, eq.h2)
+      if resi<=tol2:
+        count = step
+        break
+    for i in 0..<eq.phi2.len-1:
+      let delt = (eq.phi2[i+1] - eq.phi2[i])
+      for j in 0..<eq.grid:
+         eq.phi[i*eq.grid+j] = eq.phi2[i] + delt * (j/eq.grid)
+    eq.phi[^1] = eq.phi2[^1]
+
+    for step in 1..niter:
+      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi, eq.h)
       if resi<=tol2:
         count = step
         break
@@ -397,21 +422,21 @@ proc solveByNeutralization*(eq: var PBEquation, tolF = 0.001, tolIn = 0.00001, n
   ## a maximum of ``nitermax`` iterations, with ``niterin`` steps
   ## for each iteration. Returns the number of iterations *effectively*
   ## computed.
-  assert(eq.N >= 3)
-  let tolc = abs(tolF*eq.f0)
+  assert(eq.phi.len >= 3)
+  let tolc = abs(tolF*eq.pars.f0)
   result = 0
   var
     phi0min = minVal
     phi0max= maxVal
   if phi0min > phi0max: swap phi0min, phi0max
   var compzin: float
-  eq.bcL= BCval
-  eq.phiL = phi0max
+  eq.pars.bcL= BCval
+  eq.pars.phiL = phi0max
   discard solve(eq, niter = niterin, tol = tolIn)
   var compzoldin = ztotAdim(eq)
   var phi0 = 0.5*(phi0max + phi0min)
   for iter in 0..<nitermax:
-    eq.phiL = phi0
+    eq.pars.phiL = phi0
     let nitin = solve(eq, niter = niterin, tol = tolIn)
     if nitin >= niterin:
       stderr.writeLine("solver::Note: Reached max number of inner iteration ($1)" % $nitin)
@@ -419,7 +444,7 @@ proc solveByNeutralization*(eq: var PBEquation, tolF = 0.001, tolIn = 0.00001, n
     when defined(pbsolvDebug):
       let deriv = (eq.phi[0]-eq.phi[1])/eq.h
       echo "solveByNeutralization :: Ztot = ",compzin, " (",
-          phi0, ',',deriv,',',eq.f0,',', phi0min,',',phi0max
+          phi0, ',',deriv,',',eq.pars.f0,',', phi0min,',',phi0max
 
     inc(result)
     # Dichoto
@@ -434,7 +459,7 @@ proc solveByCondition*(eq: var PBEquation, condition: proc (e: PBEquation): floa
   ## with a maximum of ``nitermax`` iterations, with ``niterin`` steps
   ## for each iteration. Returns the number of iterations actually
   ## computed.
-  assert(eq.N >= 3)
+  assert(eq.phi.len >= 3)
   let tolc = abs(tolF)  # Input must be fine-tuned ?
   result = 0
   var
@@ -442,13 +467,13 @@ proc solveByCondition*(eq: var PBEquation, condition: proc (e: PBEquation): floa
     phi0max= maxVal
   if phi0min > phi0max: swap phi0min, phi0max
   var compzin: float
-  eq.bcL= BCval
-  eq.phiL = phi0max
+  eq.pars.bcL= BCval
+  eq.pars.phiL = phi0max
   discard solve(eq, niter = niterin, tol = tolIn)
   var compzoldin = condition(eq)
   var phi0 = 0.5*(phi0max + phi0min)
   for iter in 0..<nitermax:
-    eq.phiL = phi0
+    eq.pars.phiL = phi0
     let nitin = solve(eq, niter = niterin, tol = tolIn)
     if nitin >= niterin:
       stderr.writeLine("solver::Note: Reached max number of inner iteration ($1)" % $nitin)
@@ -467,7 +492,7 @@ proc solveByCondition*(eq: var PBEquation, condition: proc (e: PBEquation): floa
 
     
 proc residuals*(e : PBEquation): seq[float] =
-  result = newSeq[float](e.N)
+  result = newSeq[float](e.phi.len)
   for i in 1..<e.phi.high:
     result[i] = laplacian(e, i) + chargeTerm(e, e.phi[i])
     
