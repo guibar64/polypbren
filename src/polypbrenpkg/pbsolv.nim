@@ -194,6 +194,8 @@ proc initialize*(e: var PBEquation, x: float) =
   for phi in e.phi.mitems:
     phi = x
 
+{.checks:off.}
+
 proc mesh*(e: var PBEquation): seq[float] =
   ## gives the grid used by ``e`` as a sequence of x coordinates (or radial coordinates).
   result = newSeq[float](e.phi.len)
@@ -495,7 +497,9 @@ proc residuals*(e : PBEquation): seq[float] =
   result = newSeq[float](e.phi.len)
   for i in 1..<e.phi.high:
     result[i] = laplacian(e, i) + chargeTerm(e, e.phi[i])
-    
+
+
+
 when isMainModule:
   let ds=0.1
   let zv = [1.0, -1.0]
