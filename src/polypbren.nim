@@ -4,7 +4,7 @@
 #*************************************************************************
 # Main program
 
-import os,math,parseopt, strutils
+import os, math, parseopt, strutils, cpuinfo
 import polypbrenpkg / [pbren, params, distrib]
 
 proc gitRevision(): string {.compileTime.} =
@@ -37,6 +37,7 @@ proc writeVersion() =
 var 
   fileParas* = "polypbren.cfg" 
   fileDistrib* = "distrib.in"
+  maxThreads* = 1
 
 proc writeHelp() =
   echo """Usage: polypbren [OPTIONS]
@@ -46,6 +47,8 @@ Options:
   -v, --verbosity:N          Set the degree of verbosity. Levels are 0,1,2 (default: 0).
   -d, --distribution:FILE    Change the distribution file to FILE (default: distrib.in)
   -p, --parameters:FILE      Change the distribution file to FILE (default: polypbren.cfg)
+  --mth, --max-threads       Set the maximum of threads to use. 0 means the number of cores
+                             is auto-detected. (default: 1)
   --version                  Print version
  
 """
@@ -54,11 +57,20 @@ proc parseCmdLine() =
     case kind
     of cmdLongOption, cmdShortOption:
       case key
-      of "h","help": writeHelp(); quit()
-      of "d","distribution": fileDistrib = val
-      of "p","parameters": fileParas = val
-      of "v", "verbosity": verb = parseInt(val)
-      of "version": writeVersion() ; quit()
+      of "h","help":
+        writeHelp()
+        quit()
+      of "d","distribution":
+        fileDistrib = val
+      of "p","parameters":
+        fileParas = val
+      of "v", "verbosity":
+        verb = parseInt(val)
+      of "version":
+        writeVersion()
+        quit()
+      of "mth", "max-threads":
+        maxThreads = parseInt(val)
       else:
         echo "Bad command line argument"
         writeHelp()
@@ -71,6 +83,8 @@ proc main() =
   if verb >= 1:
     writeVersion()
     echo()
+
+  maxThreads = if maxThreads == 0: countProcessors() else: maxThreads
 
   loadParams(fileParas)
 
@@ -87,7 +101,7 @@ proc main() =
       echo np,' ',r,' ',s
     echo()
 
-  let pbres = doCalculations(dist)
+  let pbres = doCalculations(dist, maxThreads)
 
   proc formSci(x: float): string {.inline.} = 
     formatFloat(x, precision=7, format=ffScientific)

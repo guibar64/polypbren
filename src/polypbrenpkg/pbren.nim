@@ -8,7 +8,7 @@
 ## are available.
 
 import math
-
+import threadpool_simple
 import pbsolv, params, distrib
 
 proc calcBackDensity*(phiB:float, zv, concv: openArray[float]): float =
@@ -110,9 +110,9 @@ type PbrenRes* = object
   finalPhiv*: seq[seq[float]] ## holds electrical potential profiles foreach family
   finalMesh*: seq[seq[float]] ## holds spatial grid foreach family
 
-proc doCalculations*(distribution: Distrib): PbrenRes =
+proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
   ## Calculates potential profiles, renormalized parameters for a given ``distribution``.
-  
+  let tp = newThreadPool(maxThreads)
   var (volmoy, nptot) = calcVolmNptot(distribution)
 
   let dlen = 1.0/calcKappaEff(0.0, lambdaB, ionChv, ionDensv)
@@ -135,9 +135,8 @@ proc doCalculations*(distribution: Distrib): PbrenRes =
       result.kappaEff = calcKappaEff(phiD, lambdaB, ionChv, ionDensv)
       var rhoBack = calcBackDensity(phiD, ionChv, ionDensv)
 
-      var virtVol = 0.0
-      var zmoytemp =0.0
-      for f,fam in distribution:
+      type TaskRetType = tuple[virtVol, zmoytemp, finalSig, sigmaEffv: float, finalMesh, finalPhiv: seq[float]]   
+      proc task(fam: FamComp, ionDensv, ionChv: seq[float], dlen, kappaEff, rhoBack: float): TaskRetType = 
         let
           s0 = fam.r
           sR = s0+slength
@@ -148,25 +147,25 @@ proc doCalculations*(distribution: Distrib): PbrenRes =
                                 lambdab = lambdaB, charge = fam.ch,rho = rhoBack, gridStep = gridStep)
         eq.initialize(initer)
         let ires = eq.residual
-        var itereff = solvation(eq, distribution[f], result.finalSig[f])
+        var itereff = solvation(eq, fam, result.finalSig)
         let
           chin = 4*PI*s0*s0*sigma(eq)
-          sigren = calcZeffJellium(eq.mesh(), eq.phi, phiD , fam.r, result.kappaEff)
+          sigren = calcZeffJellium(eq.mesh(), eq.phi, phiD , fam.r, kappaEff)
           zren = sigren*4*PI*s0*s0
         if verb >= 2:
           echo "Nb of iterations: ", itereff, " R = ", fam.r," Z = ",Zr, " ChIn = ", chin
           echo "Sigma = ",fam.ch," SigmaEff = ",sigren, " Zeff = ", zren
           echo "Residue : Initial = ", ires, " Final = ", eq.residual
-        zmoytemp += fam.np.float*zren
-        result.sigmaEffv[f] = sigren
-        result.finalPhiv[f] = eq.phi
-        result.finalMesh[f] = eq.mesh()
+        result.zmoytemp += fam.np.float*zren
+        result.sigmaEffv = sigren
+        result.finalPhiv = eq.phi
+        result.finalMesh = eq.mesh()
 
         case model
         of Jellium: discard
         of Jellbid:
           var cumCharge = eq.sigmaCumSansBack()
-          var rtruc = result.finalMesh[f][eq.phi.high-1]
+          var rtruc = result.finalMesh[eq.phi.high-1]
           var itruc=0
           var prev= cumCharge[0]
           for i in 1..eq.phi.high:
@@ -178,10 +177,26 @@ proc doCalculations*(distribution: Distrib): PbrenRes =
           if itruc > 0:
             let p = cumCharge[itruc]
             let pm1 = cumCharge[itruc-1]
-            let h = result.finalMesh[f][itruc] - result.finalMesh[f][itruc-1]
+            let h = result.finalMesh[itruc] - result.finalMesh[itruc-1]
             rtruc = s0 + h*(itruc.float-p/(p-pm1))
-          virtVol += 4.0/3.0*Pi*fam.np.float*pow(rtruc,3)
+          result.virtVol = 4.0/3.0*Pi*fam.np.float*pow(rtruc,3)
         else: discard
+
+      var res = newSeq[FlowVar[TaskRetType]](distribution.len)  
+      for f, fam in distribution:
+        res[f] = tp.spawn task(fam, ionDensv, ionChv, dlen, result.kappaEff, rhoBack)
+      tp.sync()
+
+      var virtVol = 0.0
+      var zmoytemp = 0.0
+      for f in 0..<distribution.len:
+        let resf = ^res[f]
+        virtVol += resf.virtVol
+        zmoytemp += resf.zmoytemp
+        result.sigmaEffv[f] = resf.sigmaEffv
+        result.finalPhiv[f] = resf.finalPhiv
+        result.finalMesh[f] = resf.finalMesh
+        result.finalSig[f] = resf.finalSig
 
       var phiDnew=0.0
       case model
