@@ -7,3 +7,4 @@ docs/html
 tests/
 
 .vscode
+/nim.cfg
