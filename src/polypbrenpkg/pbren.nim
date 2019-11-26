@@ -223,9 +223,8 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
   of Cellmod:
     if verb >= 1: echo "Running cell model..."
     result.kappaEff = calcKappaEff(phiD, lambdaB, ionChv, ionDensv)
-    var sigmaEffvAlt = newSeq[float](distribution.len)
-    var vmoycell = 0.0
-    for f,fam in distribution:
+    type TaskRetType = tuple[npR3Cell, finalSig, sigmaEffv: float, finalMesh, finalPhiv: seq[float]]   
+    proc task(fam: FamComp, kappaEff: float, ionChv, ionDensv: seq[float]): TaskRetType {.gcSafe.} = 
       var chin,sigren, zren, sigren_ana: float
       let rp = fam.r
       let Zr = 4.0*PI*rp*rp*fam.ch
@@ -237,7 +236,6 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
       var effStep = maxSteps
       for step in 1..maxSteps:
         rcell = slim
-        let kappaEff = result.kappaEff
         proc initerCell(x: float): float =        
           let
             fplus=(kappaEff*rcell+1)/(2.0*kappaEff)*exp(-kappaEff*rcell)
@@ -248,8 +246,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
         var eq = initPBEquation(rp,slim, sbin, zv = ionChv, concv=ionDensv, kind = eqKind,
                               lambdab = lambdaB, charge = fam.ch,rho = 0.0, gridStep = gridStep)
         eq.initialize(initerCell)
-        #let ires = eq.residual
-        var itereff = solvation(eq, distribution[f], result.finalSig[f])
+        var itereff = solvation(eq, fam, result.finalSig)
 
         chin = 4*PI*rp*rp*sigma(eq)
         sigren = calcZeffCellModel(eq.phi[eq.phi.high],lambdaB,rcell,fam.r, ionChv, ionDensv)
@@ -258,8 +255,8 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
           echo "Nb of iterations: ", itereff, " R = ", fam.r," Z = ",Zr, " ChIn = ", chin, " Residue = ", eq.residual
           echo "Sigma = ",fam.ch," SigmaEff = ",sigren, " Zeff = ", zren
           echo " Rcell = ",rcell, " Phi(Rcell)= ", eq.phi[eq.phi.high]
-        result.finalPhiv[f] = eq.phi
-        result.finalMesh[f] = eq.mesh()
+        result.finalPhiv = eq.phi
+        result.finalMesh = eq.mesh()
         compz =  eq.phi[eq.phi.high] - phiD
         if abs(compz) <= abs(tolCellm*phiD): effStep=step ; break
         if maxSteps == 1: # in case of a standard monodisperse cell model
@@ -272,10 +269,24 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
 
       sigren_ana = calcZeffCellModel(phiD,lambdaB,rcell,fam.r, ionChv, ionDensv)
       if verb >= 1:
-        echo "Steps = ", effStep, " Rcell = ", rcell, " PhiR = ", result.finalPhiv[f][result.finalPhiv[f].high]," (",phiD,")", " SigmaEff2= ", sigren_ana
-      result.sigmaEffv[f] = sigren_ana
-      sigmaEffvAlt[f] = sigren
-      vmoycell += fam.np.float*pow(slim,3)
+        echo "Steps = ", effStep, " Rcell = ", rcell, " PhiR = ", result.finalPhiv[^1]," (",phiD,")", " SigmaEff2= ", sigren_ana
+      result.sigmaEffv = sigren_ana
+      # sigmaEffvAlt[f] = sigren
+      result.npR3Cell = fam.np.float*pow(slim,3)
+
+    var res = newSeq[FlowVar[TaskRetType]](distribution.len)
+    for f,fam in distribution:
+      res[f] = tp.spawn task(fam, result.kappaEff, ionChv, ionDensv)
+    tp.sync()
+
+    var vmoycell = 0.0
+    for f in 0..<distribution.len:
+      let resf = ^res[f]
+      vmoycell += resf.npR3Cell
+      result.finalPhiv[f] = resf.finalPhiv
+      result.finalMesh[f] = resf.finalMesh
+      result.finalSig[f] = resf.finalSig
+      result.sigmaEffv[f] = resf.sigmaEffv
     vmoycell *= (4*PI)/(3.0*nptot.float)
     result.volfrac = volmoy/vmoycell
     if verb >= 1:
