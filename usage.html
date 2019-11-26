@@ -114,6 +114,8 @@ function main() {
 </tr>
 <tr><th align="left">-p, --parameters:FILE</th><td align="left">Change the distribution file to FILE (default: polypbren.cfg)</td>
 </tr>
+<tr><th align="left">--mth, --max-threads:N</th><td align="left">Set the maximum of threads to use. 0 means it is auto-detected. (default: 1)</td>
+</tr>
 <tr><th align="left">--version</th><td align="left">Print version</td>
 </tr>
 </table></p></blockquote>
@@ -149,7 +151,7 @@ function main() {
 
 <h2><a class="toc-backref" id="input-parameters-ion-densities" href="#input-parameters-ion-densities">ion_densities</a></h2><p>Reservoir of the ion species. The number of items must match the one of IonCharge (Up to 8 species are accepted)</p>
 
-<h2><a class="toc-backref" id="input-parameters-condition" href="#input-parameters-condition">condition</a></h2><p>Condition at the surface of the colloid. Set to <cite>pH</cite>, for titrable surface, and <cite>charge</cite> otherwise.</p>
+<h2><a class="toc-backref" id="input-parameters-condition" href="#input-parameters-condition">condition</a></h2><p>Condition at the surface of the colloid. Set to <tt class="docutils literal"><span class="pre">pH</span></tt>, for titrable surface, and <tt class="docutils literal"><span class="pre">charge</span></tt> otherwise.</p>
 
 <h2><a class="toc-backref" id="input-parameters-ph-input" href="#input-parameters-ph-input">ph_input</a></h2><p>Sets the input pH (real number)</p>
 
@@ -186,7 +188,7 @@ function main() {
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small>Made with Nim. Generated: 2018-07-26 14:03:55 UTC</small>
+        <small>Made with Nim. Generated: 2019-11-26 13:26:13 UTC</small>
       </div>
     </div>
   </div>
