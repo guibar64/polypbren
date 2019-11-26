@@ -47,10 +47,9 @@ Options:
   -v, --verbosity:N          Set the degree of verbosity. Levels are 0,1,2 (default: 0).
   -d, --distribution:FILE    Change the distribution file to FILE (default: distrib.in)
   -p, --parameters:FILE      Change the distribution file to FILE (default: polypbren.cfg)
-  --mth, --max-threads       Set the maximum of threads to use. 0 means the number of cores
-                             is auto-detected. (default: 1)
+  --mth, --max-threads:N     Set the maximum of threads to use. 0 means it is auto-detected. (default: 1)
   --version                  Print version
- 
+
 """
 proc parseCmdLine() =
   for kind, key,val in getopt():
