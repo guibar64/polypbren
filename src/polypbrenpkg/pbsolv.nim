@@ -68,32 +68,99 @@ Here it is a simplified pH condition.
                                                   nitermax = 50, niterin = 5000, tolIn = 1.0e-4)
 ]##
 
-import sequtils, strutils, math
+import strutils, math
 import macros
 
-const NionsMax = 8
+import pbsolv_common
+export pbsolv_common
+
+import cpuinfo
+import pbsolv_sse2
+import pbsolv_avx2
+when defined(pbsolvNoAVX512):
+  import pbsolv_avx2 as pbsolv_avx512
+else:
+  import pbsolv_avx512
+
 type
-  EqModelKind* = enum
-    PlanePBE, RadialPBE
-  SaltKind = enum
-    skGeneric, skIsoVal
-  BoundaryCondition* = enum
-    BCval,BCder
-  PBEquationPars = object
-    kind*: EqModelKind
-    saltKind: SaltKind
-    bcL,bcR: BoundaryCondition
-    N, nions: int
-    s0, f0: float
-    phiL, phiLd, phiR,phiRd: float
-    lb, rho: float
-    fac,z: array[Nionsmax, float]
+  AlignedArray*[T] = object
+    len*: int
+    data: ptr UncheckedArray[T]
+    align: int
+    storage: seq[T]
+
+# proc `=copy`*[T](a: var AlignedArray[T], b: AlignedArray[T]) =
+#   if a.data != nil:
+#     alignedDealloc(a.data, a.align)
+#   a.data = cast[ptr UncheckedArray[T]](alignedAlloc0(b.len, b.align))
+#   a.len = b.len
+#   a.align = b.align
+#   for i in 0..<b.len:
+#     a.data[i] = b.data[i]
+
+# proc `=destroy`*[T](a: var AlignedArray[T]) =
+#   if a.data != nil:
+#     alignedDealloc(a.data, a.align)
+
+proc initAlignedArray*[T](len: int, align: int): AlignedArray[T] =
+  result.len = len
+  result.align = align
+  result.storage.setLen(len + align - 1)
+  let offset = align - ((cast[int](addr result.storage[1])) and (align - 1)) # we want 2nd elem to be aligned because loop starts with it
+  result.data = cast[ptr UncheckedArray[T]](addr result.storage[offset div sizeof(T)])
+  #doassert (cast[int](addr result.data[0]) and (align-1)) == 0
+  doassert (cast[int](addr result.data[1]) and (align-1)) == 0
+
+
+proc checkBounds(len, idx: int) =
+  if idx < 0 or idx >= len:
+    raise newException(IndexDefect, "Index $1 not in 0..$2" % [$idx, $(len-1)])
+
+template `[]`*[T](a: AlignedArray[T], idx: int): T = 
+  when compileOption("boundchecks"):
+    checkBounds(a.len, idx)
+  a.data[idx]
+
+template `[]=`*[T](a: AlignedArray[T], idx: int, val: T) = 
+  when compileOption("boundchecks"): 
+    checkBounds(a.len, idx)
+  a.data[idx] = val
+
+func toSeq*[T](a: AlignedArray[T]): seq[T] =
+  result.setLen(a.len)
+  for i in 0..<a.len:
+    result[i] = a.data[i]
+
+iterator items*[T](a: AlignedArray[T]): T =
+  for i in 0..<a.len:
+    yield a[i]
+
+iterator mitems*[T](a: AlignedArray[T]): var T =
+  for i in 0..<a.len:
+    yield a[i]
+
+iterator pairs*[T](a: AlignedArray[T]): (int, T) =
+  for i in 0..<a.len:
+    yield (i, a[i])
+
+iterator mpairs*[T](a: AlignedArray[T]): (int, var T) =
+  for i in 0..<a.len:
+    yield (i, a[i])
+
+
+func high*(a: AlignedArray): int {.inline.} = a.len-1
+
+template toOpenArray*[T](a: AlignedArray[T]): openArray[T] = toOpenArray(a.data, 0, a.len-1)
+
+type
   PBEquation* = object
     pars: PBEquationPars
     grid: int
     h, h2: float
-    phi*: seq[float]
-    phi2: seq[float]
+    phi*: AlignedArray[float]
+    phi2: AlignedArray[float]
+
+# proc phi*(pbe : PBEquation): seq()
 
 proc defMesh*(pbe: var PBEquation, smin, smax,sbin: float, reDefSbin = true, gridStep = 2) =
   ## Defines (or redefines) the space grid for equation ``pbe``.
@@ -103,19 +170,21 @@ proc defMesh*(pbe: var PBEquation, smin, smax,sbin: float, reDefSbin = true, gri
   ## to match the [``sbin``, ``smax``] interval and ``gridStep``.
   ## Dimensions of potential tables : N = int((smin-smax)/pas)
   ## raises ``ValueError`` if the grid is too small (number of points < 3)
+  let vecSize = 64 div sizeof(float)  # max simd vector size
   var
-    n2 = (int((smax-smin)/sbin) ) div gridStep + 1 
-    n = gridStep * (n2 - 1) + 1
-  if n2 < 3: raise newException(ValueError, "Grid too small (#points < 3): min=" & $smin & " max=" & $smax & "bin=" & $sbin)
+    nv = (int((smax-smin)/sbin) ) div (vecSize*gridStep)
+    n2 = nv*vecSize + 2
+    n = gridStep * (n2 - 2) + 2
+  if n2 < 3: raise newException(ValueError, "Grid too small (#points < 3*<vector size>): min=" & $smin & " max=" & $smax & "bin=" & $sbin)
   if reDefSbin:
     pbe.h = (smax-smin)/(float(n-1))
   else:
     pbe.h = sbin
   pbe.h2 = gridStep.float * pbe.h
   pbe.pars.s0 = smin
-  pbe.phi = newSeq[float](n)
+  pbe.phi = initAlignedArray[float](n, 64) #newSeq[float](n)
+  pbe.phi2 = initAlignedArray[float](n2, 64)
   pbe.pars.N = n
-  pbe.phi2 = newSeq[float](n2)
   pbe.grid = gridStep
 
 proc `charge=`*(e: var PBEquation, charge: float) =
@@ -194,8 +263,6 @@ proc initialize*(e: var PBEquation, x: float) =
   for phi in e.phi.mitems:
     phi = x
 
-{.checks:off.}
-
 proc mesh*(e: var PBEquation): seq[float] =
   ## gives the grid used by ``e`` as a sequence of x coordinates (or radial coordinates).
   result = newSeq[float](e.phi.len)
@@ -205,23 +272,6 @@ proc chargeTerm(e: PBEquation,phi: float): float {.noSideEffect.} =
   result = e.pars.rho
   for i in 0..<e.pars.nions:
     result += e.pars.fac[i]*exp(-e.pars.z[i]*phi)
-
-proc chargeAndDerivTerms(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
-  result.ch = e.rho
-  for i in 0..<e.nions:
-    let
-      z = e.z[i]
-      fl = e.fac[i]*exp(-z*phi)
-    result.ch += fl
-    result.der -= z*fl
-
-proc chargeAndDerivTermsIsoVal(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.noSideEffect.} =
-  let z=e.z[0]
-  let dump=e.fac[0]
-  let dump2=exp(-z*phi)
-  let dump3=1.0/dump2
-  result.ch = e.rho + dump*(dump2-dump3)
-  result.der = -z*dump*(dump2+dump3)
 
 proc ztotAdim(e: PBEquation): float {.noSideEffect.} =
   let
@@ -326,37 +376,22 @@ proc laplacian(e: PBEquation, i: int): float =
   of PlanePBE: result = (phinext - 2.0*phi + phiprev)*hi2
   of RadialPBE: result = (phinext - 2.0*phi + phiprev)*hi2 + (phinext - phiprev)*shi
 
-proc ngs_iter(RadialPlac: static[EqModelkind], saltKind: static[SaltKind], eq: var PBEquationPars,
-  phi: var openArray[float], h: float): float {.noSideEffect, inline.} =
-  # radial PBNewton Gauss-Seidel iteration
-  let
-    hh=h
-    hh2=hh*hh
-    hi2=1.0/(h*h)
-    moins2hi2= -2.0*hi2
-    ss0=eq.s0
-  result = 0.0
-  var sh=hh*ss0
-  for i in 1..<phi.len-1:
-    sh += hh2
-    let (cht, numt) =
-      when saltKind == skIsoVal: chargeAndDerivTermsIsoVal(eq, phi[i])
-      else: chargeAndDerivTerms(eq, phi[i])
-    let dlduo = moins2hi2 + numt
-    var dent: float
-    when RadialPlac == RadialPBE:
-      let shi=1.0/sh
-      dent = (phi[i+1] - 2.0*phi[i] + phi[i-1])*hi2 +
-           (phi[i+1] - phi[i-1])*shi + cht
+
+func ngs_iter(RadialPlac: static[EqModelkind], saltKind: static[SaltKind], eq: var PBEquationPars,
+    phi: var openArray[float], h: float): float {.inline.} =
+  {.noSideEffect.}:
+    when not defined(amd64) or defined(pbsolvNoSimd):
+      result = ngs_iter_novec(RadialPlac, saltKind, eq, phi, h) # may be 10% than fake vectorized one
     else:
-      dent = (phi[i+1] - 2.0*phi[i] + phi[i-1])*hi2 + cht
-    phi[i] -= dent/dlduo
-    result += dent*dent
-  result /= float(phi.len-2)
-  # BCs
-  let nlast=phi.len-1
-  if eq.bcR == BCder: phi[nlast] = phi[nlast-1] #+ eq.phiRd*h
-  if eq.bcL == BCder: phi[0] = phi[1] - eq.phiLd*h
+      result = 
+        if cpuinfo.hasAVX512f:
+          pbsolv_avx512.ngs_iter_vec(RadialPlac, saltKind, eq, phi, h)
+        elif cpuinfo.hasAVX2:
+          pbsolv_avx2.ngs_iter_vec(RadialPlac, saltKind, eq, phi, h)
+        elif cpuinfo.hasSSE2:
+          pbsolv_sse2.ngs_iter_vec(RadialPlac, saltKind, eq, phi, h)
+        else:
+          ngs_iter_novec(RadialPlac, saltKind, eq, phi, h)
 
 proc residual*(e : PBEquation): float =
   result = 0.0
@@ -394,22 +429,23 @@ proc solve*(eq: var PBEquation, niter = 10000, tol = 0.00001): int {.noSideEffec
   if eq.pars.bcR == BCval: eq.phi[eq.phi.high] = eq.pars.phiR
   var count = niter
   dispatchEqKind(eq.pars.kind, eq.pars.saltKind):
-    for i in 0..<eq.phi2.len-1:
-      eq.phi2[i] = eq.phi[i*eq.grid]
-    eq.phi2[^1] = eq.phi[^1]
+    eq.phi2[0] = eq.phi[0]
+    for i in 1..<eq.phi2.len-1:
+      eq.phi[i] = eq.phi[i*eq.grid]
+    eq.phi2[eq.phi2.len-1] = eq.phi[eq.phi.len-1]
     for step in 1..niter:
-      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi2, eq.h2)
+      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi2.toOpenArray, eq.h2)
       if resi<=tol2:
         count = step
         break
-    for i in 0..<eq.phi2.len-1:
+    for i in 1..<eq.phi2.len-1:
       let delt = (eq.phi2[i+1] - eq.phi2[i])
       for j in 0..<eq.grid:
-         eq.phi[i*eq.grid+j] = eq.phi2[i] + delt * (j/eq.grid)
-    eq.phi[^1] = eq.phi2[^1]
+        eq.phi[i*eq.grid+j] = eq.phi2[i] + delt * (j/eq.grid)
+    eq.phi[eq.phi2.len-1] = eq.phi[eq.phi2.len-1]
 
     for step in 1..niter:
-      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi, eq.h)
+      resi = ngs_iter(eqKind, eqSaltKind, eq.pars, eq.phi.toOpenArray, eq.h)
       if resi<=tol2:
         count = step
         break

@@ -150,7 +150,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
         var itereff = solvation(eq, fam, result.finalSig)
         let
           chin = 4*PI*s0*s0*sigma(eq)
-          sigren = calcZeffJellium(eq.mesh(), eq.phi, phiD , fam.r, kappaEff)
+          sigren = calcZeffJellium(eq.mesh(), eq.phi.toOpenArray, phiD , fam.r, kappaEff)
           zren = sigren*4*PI*s0*s0
         if verb >= 2:
           echo "Nb of iterations: ", itereff, " R = ", fam.r," Z = ",Zr, " ChIn = ", chin
@@ -158,7 +158,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
           echo "Residue : Initial = ", ires, " Final = ", eq.residual
         result.zmoytemp += fam.np.float*zren
         result.sigmaEffv = sigren
-        result.finalPhiv = eq.phi
+        result.finalPhiv = eq.phi.toSeq
         result.finalMesh = eq.mesh()
 
         case model
@@ -255,7 +255,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
           echo "Nb of iterations: ", itereff, " R = ", fam.r," Z = ",Zr, " ChIn = ", chin, " Residue = ", eq.residual
           echo "Sigma = ",fam.ch," SigmaEff = ",sigren, " Zeff = ", zren
           echo " Rcell = ",rcell, " Phi(Rcell)= ", eq.phi[eq.phi.high]
-        result.finalPhiv = eq.phi
+        result.finalPhiv = eq.phi.toSeq
         result.finalMesh = eq.mesh()
         compz =  eq.phi[eq.phi.high] - phiD
         if abs(compz) <= abs(tolCellm*phiD): effStep=step ; break
