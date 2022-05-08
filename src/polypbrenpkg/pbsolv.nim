@@ -74,7 +74,11 @@ import macros
 import pbsolv_common
 export pbsolv_common
 
-import cpuinfo
+when defined(pbsolvSimdTesting):
+  import cpuinfo_testing as cpuinfo
+else:
+  import cpuinfo
+
 import pbsolv_sse2
 import pbsolv_avx2
 when defined(pbsolvNoAVX512):
