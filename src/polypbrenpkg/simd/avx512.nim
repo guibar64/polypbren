@@ -32,7 +32,7 @@ func `$`*(a: M512): string =
   result = $toArray(temp)
 
 func `+`*(a, b: M512): M512 {.importc: "_mm512_add_ps", header: "<immintrin.h>".}
-func `-`*(a, b: M512): M512 {.importc: "_mm512_add_ps", header: "<immintrin.h>".}
+func `-`*(a, b: M512): M512 {.importc: "_mm512_sub_ps", header: "<immintrin.h>".}
 func `*`*(a, b: M512): M512 {.importc: "_mm512_mul_ps", header: "<immintrin.h>".}
 func `/`*(a, b: M512): M512 {.importc: "_mm512_div_ps", header: "<immintrin.h>".}
 
