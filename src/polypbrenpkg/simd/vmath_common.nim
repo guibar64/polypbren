@@ -1,6 +1,6 @@
 
 # unclear where libvecm is available
-const libmvec* {.booldefine.} = (not defined(windows) or defined(noLibmvec)) and (defined(gcc) or defined(clang))
+const libmvec* {.booldefine.} = (not defined(windows) or defined(macos) or defined(noLibmvec)) and (defined(gcc) or defined(clang))
 
 when libmvec:
   {.passl:"-lmvec"}
