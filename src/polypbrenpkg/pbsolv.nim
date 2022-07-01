@@ -118,7 +118,8 @@ proc initAlignedArray*[T](len: int, align: int): AlignedArray[T] =
 
 proc checkBounds(len, idx: int) =
   if idx < 0 or idx >= len:
-    raise newException(IndexDefect, "Index $1 not in 0..$2" % [$idx, $(len-1)])
+    raise newException(when (NimMajor, NimMinor) <= (1,4): IndexError else: IndexDefect, 
+      "Index $1 not in 0..$2" % [$idx, $(len-1)])
 
 template `[]`*[T](a: AlignedArray[T], idx: int): T = 
   when compileOption("boundchecks"):
