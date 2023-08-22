@@ -21,7 +21,7 @@ type
 {.checks: not defined(release).}
 
 
-proc chargeAndDerivTerms*(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.inline.} =
+proc chargeAndDerivTerms(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.inline.} =
   result.ch = e.rho
   for i in 0..<e.nions:
     let
@@ -30,7 +30,7 @@ proc chargeAndDerivTerms*(e: PBEquationPars,phi: float): tuple[ch: float,der: fl
     result.ch += fl
     result.der -= z*fl
 
-proc chargeAndDerivTermsIsoVal*(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.inline.} =
+proc chargeAndDerivTermsIsoVal(e: PBEquationPars,phi: float): tuple[ch: float,der: float] {.inline.} =
   let z=e.z[0]
   let dump=e.fac[0]
   let dump2=exp(-z*phi)
@@ -72,7 +72,7 @@ func ngs_iter_novec*(RadialPlac: static[EqModelkind], saltKind: static[SaltKind]
 
 
 template def_ngs_iter_vec*()  {.dirty.} =
-  func chargeAndDerivTermsVec*(e: PBEquationPars, phi: VecF64): tuple[ch: VecF64,der: VecF64] {.inline.} =
+  func chargeAndDerivTermsVec(e: PBEquationPars, phi: VecF64): tuple[ch: VecF64,der: VecF64] {.inline.} =
     result.ch = vec(e.rho)
     result.der = vec(0.0)
     for i in 0..<e.nions:
@@ -82,7 +82,7 @@ template def_ngs_iter_vec*()  {.dirty.} =
       result.ch = result.ch + fl
       result.der = result.der - z*fl
 
-  func chargeAndDerivTermsIsoValVec*(e: PBEquationPars, phi: VecF64): tuple[ch: VecF64,der: VecF64] {.inline.} =
+  func chargeAndDerivTermsIsoValVec(e: PBEquationPars, phi: VecF64): tuple[ch: VecF64,der: VecF64] {.inline.} =
     let z=vec(e.z[0])
     let dump=vec(e.fac[0])
     let dump2=exp(vec(-1.0)*z*phi)

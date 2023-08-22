@@ -1,14 +1,14 @@
 # Package
 
-version       = "0.5.0"
+version       = "0.5.1"
 author        = "G. Bareigts"
 description   = "Renormalization of colloidal charges of polydipserse dispersions using the Poisson-Boltzmann equation"
 license       = "MIT"
 
 # Dependencies
 
-requires "nim >= 1.2.0"
-requires "https://github.com/yglukhov/threadpools"
+requires "nim >= 1.6.12"
+requires "https://github.com/mratsim/constantine#f57d071f1192a4039979a3baf6c835b89841bcfa"
 
 # Build
 

@@ -6,8 +6,10 @@ special
 docs/html
 
 tests/*
-- tests/*.nims
-- tests/*.nim
+!tests/*.nims
+!tests/*.nim
 
 .vscode
 /nim.cfg
+nimble.develop
+nimble.paths

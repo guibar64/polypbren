@@ -8,7 +8,10 @@
 ## are available.
 
 import math
-import threadpool_simple
+#import threadpool_simple
+#import taskpools
+# import malebolgia
+import constantine/threadpool/threadpool
 import pbsolv, params, distrib
 
 proc calcBackDensity*(phiB:float, zv, concv: openArray[float]): float =
@@ -112,7 +115,7 @@ type PbrenRes* = object
 
 proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
   ## Calculates potential profiles, renormalized parameters for a given ``distribution``.
-  let tp = newThreadPool(maxThreads)
+  var tp = Threadpool.new(max(2, maxThreads)) # threadpool crashed with 1 thread
   var (volmoy, nptot) = calcVolmNptot(distribution)
 
   let dlen = 1.0/calcKappaEff(0.0, lambdaB, ionChv, ionDensv)
@@ -136,7 +139,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
       var rhoBack = calcBackDensity(phiD, ionChv, ionDensv)
 
       type TaskRetType = tuple[virtVol, zmoytemp, finalSig, sigmaEffv: float, finalMesh, finalPhiv: seq[float]]   
-      proc task(fam: FamComp, ionDensv, ionChv: seq[float], dlen, kappaEff, rhoBack: float): TaskRetType = 
+      proc taskImpl(fam: FamComp, ionDensv, ionChv: seq[float], dlen, kappaEff, rhoBack: float): TaskRetType = 
         let
           s0 = fam.r
           sR = s0+slength
@@ -182,15 +185,21 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
           result.virtVol = 4.0/3.0*Pi*fam.np.float*pow(rtruc,3)
         else: discard
 
+      proc task(fam: FamComp, ionDensv, ionChv: seq[float], dlen, kappaEff, rhoBack: float): TaskRetType {.raises: [].} = 
+        try:
+          taskImpl(fam, ionDensv, ionChv, dlen, kappaEff, rhoBack)
+        except Exception:
+          return default(TaskRetType)
+      
       var res = newSeq[FlowVar[TaskRetType]](distribution.len)  
       for f, fam in distribution:
         res[f] = tp.spawn task(fam, ionDensv, ionChv, dlen, result.kappaEff, rhoBack)
-      tp.sync()
+      tp.syncAll()
 
       var virtVol = 0.0
       var zmoytemp = 0.0
       for f in 0..<distribution.len:
-        let resf = ^res[f]
+        let resf = sync res[f]
         virtVol += resf.virtVol
         zmoytemp += resf.zmoytemp
         result.sigmaEffv[f] = resf.sigmaEffv
@@ -224,7 +233,7 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
     if verb >= 1: echo "Running cell model..."
     result.kappaEff = calcKappaEff(phiD, lambdaB, ionChv, ionDensv)
     type TaskRetType = tuple[npR3Cell, finalSig, sigmaEffv: float, finalMesh, finalPhiv: seq[float]]   
-    proc task(fam: FamComp, kappaEff: float, ionChv, ionDensv: seq[float]): TaskRetType {.gcSafe.} = 
+    proc taskImpl(fam: FamComp, kappaEff: float, ionChv, ionDensv: seq[float]): TaskRetType {.gcSafe.} = 
       var chin,sigren, zren, sigren_ana: float
       let rp = fam.r
       let Zr = 4.0*PI*rp*rp*fam.ch
@@ -274,14 +283,20 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
       # sigmaEffvAlt[f] = sigren
       result.npR3Cell = fam.np.float*pow(slim,3)
 
+    proc task(fam: FamComp, kappaEff: float, ionChv, ionDensv: seq[float]): TaskRetType {.gcSafe, raises: [].} = 
+      try:
+        taskImpl(fam, kappaEff, ionChv, ionDensv)
+      except Exception:
+        default(TaskRetType)
+
     var res = newSeq[FlowVar[TaskRetType]](distribution.len)
     for f,fam in distribution:
       res[f] = tp.spawn task(fam, result.kappaEff, ionChv, ionDensv)
-    tp.sync()
+    tp.syncAll()
 
     var vmoycell = 0.0
     for f in 0..<distribution.len:
-      let resf = ^res[f]
+      let resf = sync res[f]
       vmoycell += resf.npR3Cell
       result.finalPhiv[f] = resf.finalPhiv
       result.finalMesh[f] = resf.finalMesh
@@ -294,4 +309,5 @@ proc doCalculations*(distribution: Distrib, maxThreads = 1): PbrenRes =
     result.rhoEdge = calcIonDensity(phiD,lambdaB, ionChv, ionDensv)
   else:
     quit "Invalid model. Please check your input.", 6
+  tp.shutdown()
 

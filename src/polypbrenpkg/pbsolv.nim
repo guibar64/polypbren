@@ -86,6 +86,7 @@ when defined(pbsolvNoAVX512):
 else:
   import pbsolv_avx512
 
+
 type
   AlignedArray*[T] = object
     len*: int
@@ -256,7 +257,7 @@ proc initPBEquation*(smin, smax, sbin: float, zv, concv: openArray[float], kind 
     if zv[0] == -zv[1] : result.pars.saltKind = skIsoval
     else: result.pars.saltKind = skGeneric
 
-proc initialize*(e: var PBEquation, f: proc (x: float): float {.closure.}) =
+proc initialize*(e: var PBEquation, f: proc (x: float): float {.closure, gcSafe.}) =
   ## Initialize the potential with a function.
   var x = e.pars.s0
   for phi in e.phi.mitems:
@@ -496,7 +497,7 @@ proc solveByNeutralization*(eq: var PBEquation, tolF = 0.001, tolIn = 0.00001, n
     phi0 = 0.5*(phi0max + phi0min)
     if abs(compzin) <= tolc: break
 
-proc solveByCondition*(eq: var PBEquation, condition: proc (e: PBEquation): float {.closure.} , tolF = 0.001, tolIn = 0.00001,
+proc solveByCondition*(eq: var PBEquation, condition: proc (e: PBEquation): float {.closure, gcSafe.} , tolF = 0.001, tolIn = 0.00001,
                        nitermax = 500, niterin = 10000, minVal = 0.0, maxVal = 10.0): int =
   ## Solves the Equation by nullifying iteratively the conditional function  ``condition``
   ## with a maximum of ``nitermax`` iterations, with ``niterin`` steps
